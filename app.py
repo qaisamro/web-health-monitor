@@ -9,6 +9,9 @@ import asyncio
 from db import Base, engine, SessionLocal
 from models import Monitor, CheckResult
 from checker import run_checks
+from logging_config import setup_logging
+
+logger = setup_logging("app")
 
 app = FastAPI(title="Web Health Monitor (MVP + Dashboard)")
 templates = Jinja2Templates(directory="templates")
@@ -58,6 +61,7 @@ def create_monitor(payload: MonitorCreate, db: Session = Depends(get_db)):
     db.add(m)
     db.commit()
     db.refresh(m)
+    logger.info(f"Created new monitor: {m.name} ({m.url})")
     return {
         "id": m.id,
         "name": m.name,
@@ -166,6 +170,7 @@ async def run_once():
     db = SessionLocal()
     try:
         n = await run_checks(db)
+        logger.info(f"Manual run-once triggered. Checked {n} monitors.")
         return {"ok": True, "checked": n}
     finally:
         db.close()
@@ -186,5 +191,6 @@ async def _job():
 @app.on_event("startup")
 def start_scheduler():
     # Fixed interval job (every 60 seconds) for MVP
+    logger.info("Starting scheduler...")
     scheduler.add_job(lambda: asyncio.create_task(_job()), "interval", seconds=60)
     scheduler.start()

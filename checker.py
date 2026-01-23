@@ -2,6 +2,9 @@ import time
 import httpx
 from sqlalchemy.orm import Session
 from models import Monitor, CheckResult
+from logging_config import setup_logging
+
+logger = setup_logging("checker")
 
 
 async def check_one_url(url: str) -> dict:
@@ -14,6 +17,7 @@ async def check_one_url(url: str) -> dict:
         return {"is_up": is_up, "status_code": r.status_code, "response_ms": ms, "error": None}
     except Exception as e:
         ms = int((time.perf_counter() - start) * 1000)
+        logger.error(f"Error checking {url}: {e}")
         return {"is_up": False, "status_code": None, "response_ms": ms, "error": str(e)}
 
 
@@ -31,5 +35,7 @@ async def run_checks(db: Session) -> int:
                 error=result["error"],
             )
         )
+        status = "UP" if result["is_up"] else "DOWN"
+        logger.info(f"Checked {m.url}: {status} ({result['response_ms']}ms)")
     db.commit()
     return len(monitors)
