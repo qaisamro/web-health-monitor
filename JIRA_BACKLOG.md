@@ -37,6 +37,19 @@ This backlog tracks user stories, tasks, and system enhancements using Agile Scr
 
 ---
 
+### [WHMD-107] Feature: Data Export (CSV/JSON)
+**User Story:**
+> **As a** Dashboard User,
+> **I want** to export my audit data to CSV or JSON,
+> **So that** I can analyze results in external tools or keep backups.
+
+**Acceptance Criteria:**
+- [x] Add "Export JSON" button to Dashboard.
+- [x] Add "Export CSV" button to Dashboard.
+- [x] Generate file client-side using current monitor list data.
+
+**Status:** ✅ Done <!-- id: WHMD-107 -->
+
 ## 📥 Product Backlog (Unscheduled)
 
 | ID | Title | Priority | Status |
@@ -51,3 +64,4 @@ This backlog tracks user stories, tasks, and system enhancements using Agile Scr
 ## ✅ Completed Issues
 - **[WHMD-101]** Feature: Recent URLs & Search History - *Status: Done* ✅
 - **[WHMD-102]** Improvement: Dashboard Stats Summary - *Status: Done* ✅
+- **[WHMD-107]** Feature: Data Export (CSV/JSON) - *Status: Done* ✅
