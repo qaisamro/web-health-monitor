@@ -33,7 +33,7 @@ This backlog tracks user stories, tasks, and system enhancements using Agile Scr
 - [ ] Calculate uptime percentage (Up / Total Checks).
 - [ ] Display in premium-styled cards above the monitor grid.
 
-**Status:** 🆕 Backlog
+**Status:** ✅ Done <!-- id: WHMD-102 -->
 
 ---
 
@@ -50,3 +50,4 @@ This backlog tracks user stories, tasks, and system enhancements using Agile Scr
 
 ## ✅ Completed Issues
 - **[WHMD-101]** Feature: Recent URLs & Search History - *Status: Done* ✅
+- **[WHMD-102]** Improvement: Dashboard Stats Summary - *Status: Done* ✅
