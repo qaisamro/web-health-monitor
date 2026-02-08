@@ -538,6 +538,72 @@
       gap: 1rem;
       box-shadow: var(--shadow-lg);
       transition: border-color 0.3s;
+      position: relative;
+      /* Added for suggestions positioning */
+    }
+
+    /* Search Suggestions Styles */
+    .search-suggestions {
+      position: absolute;
+      top: 100%;
+      left: 2rem;
+      right: 2rem;
+      background: var(--bg-glass);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      margin-top: 0.5rem;
+      box-shadow: var(--shadow-xl);
+      z-index: 1000;
+      display: none;
+      max-height: 250px;
+      overflow-y: auto;
+      padding: 0.5rem;
+    }
+
+    .suggestion-item {
+      padding: 0.8rem 1rem;
+      cursor: pointer;
+      border-radius: var(--radius-sm);
+      display: flex;
+      align-items: center;
+      gap: 0.8rem;
+      color: var(--text-main);
+      transition: all 0.2s;
+      font-size: 0.9rem;
+    }
+
+    .suggestion-item:hover {
+      background: rgba(var(--primary), 0.1);
+      color: var(--primary);
+      transform: translateX(5px);
+    }
+
+    .suggestion-item i {
+      opacity: 0.5;
+    }
+
+    .suggestion-header {
+      padding: 0.5rem 1rem;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 0.5rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .clear-history {
+      cursor: pointer;
+      color: var(--danger);
+      font-size: 0.7rem;
+    }
+
+    .clear-history:hover {
+      text-decoration: underline;
     }
 
     .search-box-wrapper:focus-within {
@@ -2094,7 +2160,8 @@
 
       <form id="psi-search-form" class="search-box-wrapper">
         <input type="url" class="search-input" id="psi-url-input" placeholder="Enter website URL for instant audit..."
-          required>
+          required autocomplete="off">
+        <div id="search-suggestions" class="search-suggestions"></div>
 
         <div class="device-toggle">
           <button type="button" class="toggle-btn active" id="btn-mobile" onclick="setStrategy('mobile')"
@@ -2598,6 +2665,93 @@
       }, 1000);
     }
 
+    // --- Search Suggestions & Recent URLs ---
+    let recentUrls = JSON.parse(localStorage.getItem('recentUrls') || '[]');
+
+    function saveRecentUrls() {
+      localStorage.setItem('recentUrls', JSON.stringify(recentUrls));
+    }
+
+    window.addRecentUrl = function (url) {
+      if (!url) return;
+      // remove if already exists to move to top
+      recentUrls = recentUrls.filter(u => u !== url);
+      recentUrls.unshift(url);
+      if (recentUrls.length > 5) recentUrls.pop();
+      saveRecentUrls();
+      renderSuggestions();
+    }
+
+    window.clearRecentUrls = function (e) {
+      if (e) e.stopPropagation();
+      recentUrls = [];
+      saveRecentUrls();
+      renderSuggestions();
+      showToast('Search history cleared', 'info');
+    }
+
+    window.selectSuggestion = function (url) {
+      const input = document.getElementById('psi-url-input');
+      if (input) {
+        input.value = url;
+        const suggestionsBox = document.getElementById('search-suggestions');
+        if (suggestionsBox) suggestionsBox.style.display = 'none';
+        // Trigger focus for a nice effect
+        setTimeout(() => input.focus(), 100);
+      }
+    }
+
+    function renderSuggestions(filter = '') {
+      const box = document.getElementById('search-suggestions');
+      if (!box) return;
+
+      const filtered = recentUrls.filter(u => u.toLowerCase().includes(filter.toLowerCase()));
+
+      if (filtered.length === 0 && !filter) {
+        box.style.display = 'none';
+        return;
+      }
+
+      let html = `
+        <div class="suggestion-header">
+          <span>${filter ? 'Suggestions' : 'Recent Searches'}</span>
+          ${recentUrls.length > 0 ? `<span class="clear-history" onclick="clearRecentUrls(event)">Clear History</span>` : ''}
+        </div>
+      `;
+
+      if (filtered.length === 0) {
+        html += `<div class="suggestion-item" style="cursor: default; opacity: 0.6;">No matches found</div>`;
+      } else {
+        html += filtered.map(url => `
+          <div class="suggestion-item" onclick="selectSuggestion('${url}')">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity: 0.5;">
+              <circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+            ${url}
+          </div>
+        `).join('');
+      }
+
+      box.innerHTML = html;
+      box.style.display = 'block';
+    }
+
+    function setupSuggestions() {
+      const input = document.getElementById('psi-url-input');
+      const box = document.getElementById('search-suggestions');
+      if (!input || !box) return;
+
+      input.onfocus = () => renderSuggestions(input.value);
+      input.oninput = () => renderSuggestions(input.value);
+
+      // Close box when clicking outside
+      document.addEventListener('click', (e) => {
+        if (!input.contains(e.target) && !box.contains(e.target)) {
+          box.style.display = 'none';
+        }
+      });
+    }
+
     function setupPSIForm() {
       const form = document.getElementById('psi-search-form');
       if (!form) return;
@@ -2621,6 +2775,7 @@
             body: JSON.stringify({ name: hostname, url: url, interval_seconds: 60, strategy: currentStrategy })
           });
           if (res && res.id) {
+            addRecentUrl(url); // Save to history
             showToast('تمت إضافة الموقع، بانتظار النتائج...', 'success');
             selectedId = res.id;
             startCountdown(res.id);
@@ -2900,7 +3055,8 @@
       loadTheme();
 
       // Setup global event listeners
-      setupAuth();
+      setupSuggestions();
+      setupPSIForm();
       setupChat();
 
       if (token) {
