@@ -1,4 +1,13 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Float, JSON
+from sqlalchemy import (
+    Column,
+    Integer,
+    String,
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Float,
+    JSON,
+)
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from db import Base
@@ -16,20 +25,22 @@ class Monitor(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     # Performance Stats
-    perf_score = Column(Float, nullable=True) # 0-100
-    perf_fcp = Column(Float, nullable=True)   # First Contentful Paint (s)
-    perf_lcp = Column(Float, nullable=True)   # Largest Contentful Paint (s)
-    perf_cls = Column(Float, nullable=True)   # Cumulative Layout Shift
-    
+    perf_score = Column(Float, nullable=True)  # 0-100
+    perf_fcp = Column(Float, nullable=True)  # First Contentful Paint (s)
+    perf_lcp = Column(Float, nullable=True)  # Largest Contentful Paint (s)
+    perf_cls = Column(Float, nullable=True)  # Cumulative Layout Shift
+
     perf_seo = Column(Float, nullable=True)
     perf_accessible = Column(Float, nullable=True)
     perf_best_practices = Column(Float, nullable=True)
-    perf_details = Column(JSON, nullable=True) # List of failing audits/errors
-    perf_screenshot = Column(String, nullable=True) # Base64 webp screenshot
-    perf_thumbnails = Column(JSON, nullable=True) # Animated filmstrip thumbnails
+    perf_details = Column(JSON, nullable=True)  # List of failing audits/errors
+    perf_screenshot = Column(String, nullable=True)  # Base64 webp screenshot
+    perf_thumbnails = Column(JSON, nullable=True)  # Animated filmstrip thumbnails
     perf_tbt = Column(Float, nullable=True)
 
-    checks = relationship("CheckResult", back_populates="monitor", cascade="all, delete-orphan")
+    checks = relationship(
+        "CheckResult", back_populates="monitor", cascade="all, delete-orphan"
+    )
 
 
 class CheckResult(Base):

@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from db import SessionLocal
 from models import Monitor as MonitorModel, CheckResult as CheckResultModel
 
+
 @strawberry.type
 class CheckResult:
     id: int
@@ -15,6 +16,7 @@ class CheckResult:
     response_ms: int
     error: Optional[str]
 
+
 @strawberry.type
 class Monitor:
     id: int
@@ -22,12 +24,18 @@ class Monitor:
     url: str
     interval_seconds: int
     is_active: bool
-    
+
     @strawberry.field
     def checks(self, limit: int = 10) -> List[CheckResult]:
         db = SessionLocal()
         try:
-            results = db.query(CheckResultModel).filter(CheckResultModel.monitor_id == self.id).order_by(CheckResultModel.checked_at.desc()).limit(limit).all()
+            results = (
+                db.query(CheckResultModel)
+                .filter(CheckResultModel.monitor_id == self.id)
+                .order_by(CheckResultModel.checked_at.desc())
+                .limit(limit)
+                .all()
+            )
             return [
                 CheckResult(
                     id=r.id,
@@ -36,11 +44,13 @@ class Monitor:
                     is_up=r.is_up,
                     status_code=r.status_code,
                     response_ms=r.response_ms,
-                    error=r.error
-                ) for r in results
+                    error=r.error,
+                )
+                for r in results
             ]
         finally:
             db.close()
+
 
 @strawberry.type
 class Query:
@@ -55,11 +65,13 @@ class Query:
                     name=m.name,
                     url=m.url,
                     interval_seconds=m.interval_seconds,
-                    is_active=m.is_active
-                ) for m in monitors
+                    is_active=m.is_active,
+                )
+                for m in monitors
             ]
         finally:
             db.close()
+
 
 schema = strawberry.Schema(query=Query)
 graphql_app = GraphQLRouter(schema)

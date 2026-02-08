@@ -12,6 +12,7 @@ from db import SessionLocal
 from models import Monitor, CheckResult
 from checker import CheckStrategyFactory, run_check_on_monitor
 from logging_config import setup_logging
+
 logger = setup_logging()
 logger.info("--- WORKER v2.3.1 STARTING ---")
 
@@ -25,9 +26,11 @@ strategy_factory = CheckStrategyFactory()
 http_strategy = strategy_factory.get_strategy("http")
 perf_strategy = strategy_factory.get_strategy("performance")
 
+
 @circuit(failure_threshold=5, recovery_timeout=60)
 async def resilient_check(monitor):
     return await run_check_on_monitor(monitor, http_strategy)
+
 
 async def process_audit(monitor_id: int, strategy: str = "mobile"):
     logger.info(f"🔍 [Worker] process_audit called for ID {monitor_id}")
@@ -39,11 +42,13 @@ async def process_audit(monitor_id: int, strategy: str = "mobile"):
         if not monitor:
             logger.warning(f"⚠️ [Worker] Monitor {monitor_id} not found in DB.")
             return
-        
-        logger.info(f"🚀 [Worker] Starting Performance Audit ({strategy}) for {monitor.url}")
+
+        logger.info(
+            f"🚀 [Worker] Starting Performance Audit ({strategy}) for {monitor.url}"
+        )
         result = await perf_strategy.check(monitor.url, strategy=strategy)
         logger.info(f"🔍 [Worker] PSI Check returned for {monitor.url}")
-        
+
         if not result.get("error"):
             monitor.perf_score = result["perf_score"]
             monitor.perf_seo = result["perf_seo"]
@@ -57,16 +62,19 @@ async def process_audit(monitor_id: int, strategy: str = "mobile"):
             monitor.perf_screenshot = result["perf_screenshot"]
             monitor.perf_thumbnails = result.get("perf_thumbnails")
             db.commit()
-            logger.info(f"✅ Audit Complete for {monitor.url}: Score {result['perf_score']}")
-            
+            logger.info(
+                f"✅ Audit Complete for {monitor.url}: Score {result['perf_score']}"
+            )
+
             # Broadcast update via API internal endpoint
             try:
                 api_base = os.getenv("API_URL", "http://api:8000")
                 async with httpx.AsyncClient() as client:
-                    await client.post(f"{api_base}/api/v1/internal/broadcast", json={
-                        "event": "audit_finished",
-                        "monitor_id": monitor.id
-                    }, timeout=5.0)
+                    await client.post(
+                        f"{api_base}/api/v1/internal/broadcast",
+                        json={"event": "audit_finished", "monitor_id": monitor.id},
+                        timeout=5.0,
+                    )
             except Exception as e:
                 logger.error(f"Failed to notify API: {e}")
         else:
@@ -79,14 +87,20 @@ async def process_audit(monitor_id: int, strategy: str = "mobile"):
             try:
                 api_base = os.getenv("API_URL", "http://api:8000")
                 async with httpx.AsyncClient() as client:
-                    await client.post(f"{api_base}/api/v1/internal/broadcast", json={
-                        "event": "audit_failed",
-                        "monitor_id": monitor.id,
-                        "error": str(e)
-                    }, timeout=5.0)
-            except: pass
+                    await client.post(
+                        f"{api_base}/api/v1/internal/broadcast",
+                        json={
+                            "event": "audit_failed",
+                            "monitor_id": monitor.id,
+                            "error": str(e),
+                        },
+                        timeout=5.0,
+                    )
+            except:
+                pass
     finally:
         db.close()
+
 
 async def process_check(monitor_id: int):
     db = SessionLocal()
@@ -97,10 +111,10 @@ async def process_check(monitor_id: int):
             return
 
         logger.info(f"Processing check for {monitor.url} (ID: {monitor_id})")
-        
+
         try:
             result = await resilient_check(monitor)
-            
+
             # Save result
             db.add(
                 CheckResult(
@@ -112,27 +126,35 @@ async def process_check(monitor_id: int):
                 )
             )
             db.commit()
-            
+
             status = "UP" if result["is_up"] else "DOWN"
-            logger.info(f"Result for {monitor.url}: {status} ({result['response_ms']}ms)")
-            
+            logger.info(
+                f"Result for {monitor.url}: {status} ({result['response_ms']}ms)"
+            )
+
             # Broadcast instant update via API
             try:
                 api_base = os.getenv("API_URL", "http://api:8000")
                 async with httpx.AsyncClient() as client:
-                    await client.post(f"{api_base}/api/v1/internal/broadcast", json={
-                        "event": "check_finished",
-                        "monitor_id": monitor.id,
-                        "is_up": result["is_up"]
-                    }, timeout=2.0)
-            except: pass
+                    await client.post(
+                        f"{api_base}/api/v1/internal/broadcast",
+                        json={
+                            "event": "check_finished",
+                            "monitor_id": monitor.id,
+                            "is_up": result["is_up"],
+                        },
+                        timeout=2.0,
+                    )
+            except:
+                pass
 
         except Exception as e:
             # This catches CircuitBreaker errors or other execution flows
             logger.error(f"Execution failed for {monitor.url}: {e}")
-            
+
     finally:
         db.close()
+
 
 def callback(ch, method, properties, body):
     try:
@@ -142,7 +164,7 @@ def callback(ch, method, properties, body):
         monitor_id = data.get("monitor_id")
         task_type = data.get("task_type", "check")
         strategy = data.get("strategy", "mobile")
-        
+
         if monitor_id:
             if task_type == "audit":
                 asyncio.run(process_audit(monitor_id, strategy=strategy))
@@ -150,18 +172,21 @@ def callback(ch, method, properties, body):
                 asyncio.run(process_check(monitor_id))
     except Exception as e:
         logger.error(f"Error in callback: {e}")
-            
+
     ch.basic_ack(delivery_tag=method.delivery_tag)
+
 
 def main():
     logger.info(f"Worker starting, connecting to RabbitMQ at {RABBITMQ_HOST}...")
     import traceback
-    
+
     retries = 5
     while retries > 0:
         try:
             connection = pika.BlockingConnection(
-                pika.ConnectionParameters(host=RABBITMQ_HOST, connection_attempts=3, retry_delay=5)
+                pika.ConnectionParameters(
+                    host=RABBITMQ_HOST, connection_attempts=3, retry_delay=5
+                )
             )
             channel = connection.channel()
             channel.queue_declare(queue=QUEUE_NAME, durable=True)
@@ -176,11 +201,14 @@ def main():
             logger.error(traceback.format_exc())
             retries -= 1
             if retries > 0:
-                logger.info(f"Retrying connection in 5 seconds... ({retries} attempts left)")
+                logger.info(
+                    f"Retrying connection in 5 seconds... ({retries} attempts left)"
+                )
                 time.sleep(5)
             else:
                 logger.error("Max retries reached. Exiting.")
                 sys.exit(1)
+
 
 if __name__ == "__main__":
     main()

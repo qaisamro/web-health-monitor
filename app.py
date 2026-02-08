@@ -1,4 +1,11 @@
-from fastapi import FastAPI, Depends, HTTPException, Request, WebSocket, WebSocketDisconnect
+from fastapi import (
+    FastAPI,
+    Depends,
+    HTTPException,
+    Request,
+    WebSocket,
+    WebSocketDisconnect,
+)
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -7,6 +14,7 @@ from sqlalchemy.orm import Session
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 import asyncio
 from logging_config import setup_logging
+
 logger = setup_logging()
 logger.info("--- APP v2.3.1 STARTING ---")
 
@@ -43,6 +51,7 @@ app = FastAPI(
     },
 )
 
+
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
     logger.info(f"Incoming Request: {request.method} {request.url}")
@@ -51,10 +60,12 @@ async def log_requests(request: Request, call_next):
         logger.info(f"Auth Header: {auth[:10]}...")
     else:
         logger.info("Auth Header: None")
-    
+
     response = await call_next(request)
     logger.info(f"Response Status: {response.status_code}")
     return response
+
+
 templates = Jinja2Templates(directory="templates")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
@@ -71,6 +82,7 @@ Base.metadata.create_all(bind=engine)
 
 # Quick Migration: Ensure all columns exist
 from sqlalchemy import text
+
 columns_to_add = [
     ("strategy", "VARCHAR DEFAULT 'mobile'"),
     ("perf_score", "FLOAT"),
@@ -83,7 +95,7 @@ columns_to_add = [
     ("perf_best_practices", "FLOAT"),
     ("perf_details", "JSON"),
     ("perf_screenshot", "TEXT"),
-    ("perf_thumbnails", "JSON")
+    ("perf_thumbnails", "JSON"),
 ]
 
 with engine.connect() as conn:
@@ -93,7 +105,9 @@ with engine.connect() as conn:
         except Exception:
             logger.info(f"Migrating: Adding '{col_name}' column to monitors table...")
             try:
-                conn.execute(text(f"ALTER TABLE monitors ADD COLUMN {col_name} {col_type}"))
+                conn.execute(
+                    text(f"ALTER TABLE monitors ADD COLUMN {col_name} {col_type}")
+                )
                 conn.commit()
             except Exception as e:
                 logger.error(f"Failed to add column {col_name}: {e}")
@@ -112,14 +126,19 @@ class ConnectionManager:
         self.active_connections.remove(websocket)
 
     async def broadcast(self, message: dict):
-        print(f"Broadcast: {message.get('event')} to {len(self.active_connections)} clients", flush=True)
+        print(
+            f"Broadcast: {message.get('event')} to {len(self.active_connections)} clients",
+            flush=True,
+        )
         for connection in self.active_connections:
             try:
                 await connection.send_json(message)
             except:
-                pass # Handle stale connections if any
+                pass  # Handle stale connections if any
+
 
 manager = ConnectionManager()
+
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
@@ -174,16 +193,18 @@ def create_monitor(payload: MonitorCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(m)
     logger.info(f"Created new monitor: {m.name} ({m.url})")
-    
+
     # Asynchronous trigger: Push to queue immediately after creation
     try:
         publish_check(m.id, task_type="check")
-        publish_check(m.id, task_type="audit") # Also trigger performance audit
+        publish_check(m.id, task_type="audit")  # Also trigger performance audit
     except Exception as e:
         logger.error(f"Failed to publish initial check/audit for {m.id}: {e}")
 
     # Notify UI via WebSocket
-    asyncio.create_task(manager.broadcast({"event": "monitor_created", "monitor_id": m.id}))
+    asyncio.create_task(
+        manager.broadcast({"event": "monitor_created", "monitor_id": m.id})
+    )
 
     return {
         "id": m.id,
@@ -218,7 +239,9 @@ def list_monitors(db: Session = Depends(get_db)):
 
 
 @app.patch("/monitors/{monitor_id}", tags=["Legacy"])
-def update_monitor(monitor_id: int, payload: MonitorUpdate, db: Session = Depends(get_db)):
+def update_monitor(
+    monitor_id: int, payload: MonitorUpdate, db: Session = Depends(get_db)
+):
     m = db.query(Monitor).filter(Monitor.id == monitor_id).first()
     if not m:
         raise HTTPException(status_code=404, detail="Monitor not found")
@@ -253,12 +276,15 @@ def delete_monitor(monitor_id: int, db: Session = Depends(get_db)):
     db.commit()
     return {"ok": True}
 
+
 @app.post("/monitors/{monitor_id}/audit", tags=["Legacy"])
-async def trigger_monitor_audit(monitor_id: int, strategy: str = "mobile", db: Session = Depends(get_db)):
+async def trigger_monitor_audit(
+    monitor_id: int, strategy: str = "mobile", db: Session = Depends(get_db)
+):
     m = db.query(Monitor).filter(Monitor.id == monitor_id).first()
     if not m:
         raise HTTPException(status_code=404, detail="Monitor not found")
-    
+
     try:
         publish_check(m.id, task_type="audit", strategy=strategy)
         # Notify UI to start countdown
@@ -267,6 +293,7 @@ async def trigger_monitor_audit(monitor_id: int, strategy: str = "mobile", db: S
     except Exception as e:
         logger.error(f"Failed to trigger manual audit for {monitor_id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to queue audit")
+
 
 @app.post("/api/v1/internal/broadcast", include_in_schema=False)
 async def internal_broadcast(payload: dict):
@@ -317,7 +344,11 @@ def list_checks(monitor_id: int, limit: int = 50, db: Session = Depends(get_db))
     ]
 
 
-@app.post("/run-once", summary="Trigger all checks manually", description="Publishes check requests for all active monitors to the distributed worker queue.")
+@app.post(
+    "/run-once",
+    summary="Trigger all checks manually",
+    description="Publishes check requests for all active monitors to the distributed worker queue.",
+)
 async def run_once(db: Session = Depends(get_db)):
     """Manually trigger checks once by pushing all active monitor IDs to the queue."""
     monitors = db.query(Monitor).filter(Monitor.is_active == True).all()
@@ -329,17 +360,20 @@ async def run_once(db: Session = Depends(get_db)):
             count += 1
         except Exception as e:
             logger.error(f"Failed to publish check/audit for {m.id}: {e}")
-    
-    logger.info(f"Manual run-once triggered. Pushed {count} monitor IDs for full audit.")
-    
+
+    logger.info(
+        f"Manual run-once triggered. Pushed {count} monitor IDs for full audit."
+    )
+
     # Notify UI via WebSocket
     asyncio.create_task(manager.broadcast({"event": "checks_running", "count": count}))
-    
+
     return {"ok": True, "pushed": count}
 
 
 # -------------------- Scheduler (Producer) --------------------
 scheduler = AsyncIOScheduler()
+
 
 async def _job():
     """Periodic job that pushes monitor IDs to the queue for health checks."""
@@ -354,6 +388,7 @@ async def _job():
     finally:
         db.close()
 
+
 async def _audit_job():
     """Periodic job for performance audits (every hour)."""
     db = SessionLocal()
@@ -367,12 +402,14 @@ async def _audit_job():
     finally:
         db.close()
 
+
 @app.on_event("startup")
 async def startup_tasks():
     # Run migration
     logger.info("Checking for database migrations...")
     try:
         from migrate_db import migrate
+
         migrate()
         logger.info("Database migration check finished.")
     except Exception as e:
@@ -381,5 +418,7 @@ async def startup_tasks():
     # Start producer scheduler
     logger.info("Starting producer scheduler...")
     scheduler.add_job(_job, "interval", seconds=60)
-    scheduler.add_job(_audit_job, "interval", hours=1) # Run performance audit every hour
+    scheduler.add_job(
+        _audit_job, "interval", hours=1
+    )  # Run performance audit every hour
     scheduler.start()
