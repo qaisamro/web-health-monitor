@@ -2281,7 +2281,29 @@
     <section id="dashboard-view" style="display: none; padding-top: 2rem; max-width: 1000px; margin: 0 auto 4rem;">
       <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 2rem;">
         <h2 style="font-size: 1.5rem;">Recent Audits</h2>
-        <button onclick="showHome()" class="btn btn-outline">&larr; New Analysis</button>
+        <div style="display: flex; gap: 0.5rem;">
+          <button onclick="exportData('json')" class="btn btn-outline"
+            style="padding: 0.4rem 0.8rem; font-size: 0.8rem;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              style="margin-right: 4px;">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+            JSON
+          </button>
+          <button onclick="exportData('csv')" class="btn btn-outline"
+            style="padding: 0.4rem 0.8rem; font-size: 0.8rem;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              style="margin-right: 4px;">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+            CSV
+          </button>
+          <button onclick="showHome()" class="btn btn-outline">&larr; New Analysis</button>
+        </div>
       </div>
 
       <!-- Global Stats Summary -->
@@ -2894,6 +2916,54 @@
       });
     }
 
+    // --- Data Export ---
+    window.exportData = async function (format) {
+      showToast(`Preparing ${format.toUpperCase()} export...`, 'info');
+      try {
+        const monitors = await api('/api/v1/monitors');
+        if (!monitors || monitors.length === 0) {
+          showToast('No data to export', 'warning');
+          return;
+        }
+
+        let blob;
+        let filename = `web_health_export_${new Date().toISOString().split('T')[0]}`;
+
+        if (format === 'json') {
+          const dataStr = JSON.stringify(monitors, null, 2);
+          blob = new Blob([dataStr], { type: 'application/json' });
+          filename += '.json';
+        } else if (format === 'csv') {
+          const headers = ['ID', 'Name', 'URL', 'Strategy', 'Interval', 'Performance Score', 'Last FCP'];
+          const rows = monitors.map(m => [
+            m.id,
+            `"${m.name}"`,
+            `"${m.url}"`,
+            m.strategy || 'mobile',
+            m.interval_seconds,
+            m.perf_score ?? '--',
+            m.perf_fcp ?? '--'
+          ]);
+          const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+          blob = new Blob([csvContent], { type: 'text/csv' });
+          filename += '.csv';
+        }
+
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        showToast('Export successful!', 'success');
+      } catch (err) {
+        console.error("Export failed:", err);
+        showToast('Failed to export data', 'error');
+      }
+    }
+
     function setupPSIForm() {
       const form = document.getElementById('psi-search-form');
       if (!form) return;
@@ -3197,6 +3267,7 @@
       loadTheme();
 
       // Setup global event listeners
+      setupAuth();
       setupSuggestions();
       setupPSIForm();
       setupChat();
@@ -3211,7 +3282,6 @@
           if (userDisplay) userDisplay.innerText = `Signed in as ${localStorage.getItem('user') || 'Admin'}`;
 
           setupWS();
-          setupPSIForm();
           const hero = document.getElementById('hero-area');
           if (hero) hero.style.display = 'block';
           console.log("✅ App Ready.");
