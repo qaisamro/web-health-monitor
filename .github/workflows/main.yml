@@ -9,6 +9,8 @@ on:
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: .
     steps:
     - uses: actions/checkout@v3
     
@@ -30,7 +32,7 @@ jobs:
         
     - name: Run tests with pytest
       run: |
-        pytest --cov=. --cov-report=xml
+        python -m pytest --cov=. --cov-report=xml
         
     - name: Build Docker Image (Dry Run)
       run: |
