@@ -1,0 +1,152 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: monitor-config
+data:
+  RABBITMQ_HOST: "rabbitmq-service"
+  DATABASE_URL: "sqlite:////data/monitor.db"
+  GOOGLE_API_KEY: "AIzaSyBweS2ljDDRD2z6CmJBzwgJUKqhBfyxhXw"
+  API_URL: "http://api-service"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rabbitmq
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rabbitmq
+  template:
+    metadata:
+      labels:
+        app: rabbitmq
+    spec:
+      containers:
+      - name: rabbitmq
+        image: rabbitmq:3-management
+        ports:
+        - containerPort: 5672
+        - containerPort: 15672
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rabbitmq-service
+spec:
+  selector:
+    app: rabbitmq
+  ports:
+    - protocol: TCP
+      port: 5672
+      targetPort: 5672
+---
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: sqlite-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-deployment
+spec:
+  replicas: 1 # SQLite doesn't support concurrent writes from multiple pods well, setting to 1 for now
+  selector:
+    matchLabels:
+      app: api
+  template:
+    metadata:
+      labels:
+        app: api
+    spec:
+      containers:
+      - name: api
+        image: healthmonitorregistry.azurecr.io/api:latest
+        imagePullPolicy: Always
+        command: ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
+        ports:
+        - containerPort: 8000
+        envFrom:
+        - configMapRef:
+            name: monitor-config
+        volumeMounts:
+        - name: data-volume
+          mountPath: /data
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+          requests:
+            cpu: "200m"
+            memory: "256Mi"
+      volumes:
+      - name: data-volume
+        persistentVolumeClaim:
+          claimName: sqlite-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-service
+spec:
+  type: LoadBalancer
+  selector:
+    app: api
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8000
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: worker-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: worker
+  template:
+    metadata:
+      labels:
+        app: worker
+    spec:
+      affinity:
+        podAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: app
+                operator: In
+                values:
+                - api
+            topologyKey: "kubernetes.io/hostname"
+      containers:
+      - name: worker
+        image: healthmonitorregistry.azurecr.io/api:latest
+        command: ["python", "worker.py"]
+        envFrom:
+        - configMapRef:
+            name: monitor-config
+        volumeMounts:
+        - name: data-volume
+          mountPath: /data
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+          requests:
+            cpu: "200m"
+            memory: "256Mi"
+      volumes:
+      - name: data-volume
+        persistentVolumeClaim:
+          claimName: sqlite-pvc

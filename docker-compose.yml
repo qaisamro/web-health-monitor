@@ -1,0 +1,103 @@
+services:
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672" # RabbitMQ port
+      - "15672:15672" # Management UI
+    healthcheck:
+      test: [ "CMD", "rabbitmq-diagnostics", "-q", "ping" ]
+      interval: 15s
+      timeout: 10s
+      retries: 30
+      start_period: 30s
+
+  api:
+    build: .
+    command: uvicorn app:app --host 0.0.0.0 --port 8000
+    ports:
+      - "8000:8000"
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - API_URL=http://api:8000
+      - APP_VERSION=v2.3.1
+      - GOOGLE_API_KEY=AIzaSyBweS2ljDDRD2z6CmJBzwgJUKqhBfyxhXw
+      # - GOOGLE_API_KEY=AIzaSyDi9JYtfDNhF450dVmOINk_CVjXyYoYKwg
+      - DATABASE_URL=sqlite:////app/data/monitor.db
+    volumes:
+      - .:/app
+      - sqlite_data:/app/data
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+  worker:
+    build: .
+    command: python worker.py
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - API_URL=http://api:8000
+      - APP_VERSION=v2.3.1
+      - GOOGLE_API_KEY=AIzaSyBweS2ljDDRD2z6CmJBzwgJUKqhBfyxhXw
+      # - GOOGLE_API_KEY=AIzaSyDi9JYtfDNhF450dVmOINk_CVjXyYoYKwg
+      - DATABASE_URL=sqlite:////app/data/monitor.db
+    volumes:
+      - .:/app
+      - sqlite_data:/app/data
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+  # --- Monitoring Stack (Prometheus/Grafana) ---
+
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+  # --- Disabling ELK Stack (Too heavy for current environment) ---
+  # elasticsearch:
+  #   image: docker.elastic.co/elasticsearch/elasticsearch:7.17.10
+  #   environment:
+  #     - discovery.type=single-node
+  #     - "ES_JAVA_OPTS=-Xms512m -Xmx512m" # Limit memory usage
+  #   ports:
+  #     - "9200:9200"
+  #   healthcheck:
+  #     test: [ "CMD-SHELL", "curl -s http://localhost:9200/_cluster/health | grep -vq '\"status\":\"red\"'" ]
+  #     interval: 20s
+  #     timeout: 10s
+  #     retries: 5
+
+  # kibana:
+  #   image: docker.elastic.co/kibana/kibana:7.17.10
+  #   ports:
+  #     - "5601:5601"
+  #   environment:
+  #     - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+  #   depends_on:
+  #     elasticsearch:
+  #       condition: service_healthy
+
+  # logstash:
+  #   image: docker.elastic.co/logstash/logstash:7.17.10
+  #   volumes:
+  #     - ./monitoring/logstash.conf:/usr/share/logstash/pipeline/logstash.conf
+  #   depends_on:
+  #     - elasticsearch
+
+volumes:
+  sqlite_data:

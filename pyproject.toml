@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "web-health-monitor"
+version = "2.3.1"
+description = "Web Health Monitor Dashboard with AKS Deployment"
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "sqlalchemy",
+    "pika",
+    "httpx",
+    "jinja2",
+    "python-logging-loki",
+    "prometheus-client"
+]
+
+[tool.black]
+line-length = 88
+target-version = ['py39']
+
+[tool.isort]
+profile = "black"
