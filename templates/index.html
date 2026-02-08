@@ -3197,6 +3197,7 @@
       loadTheme();
 
       // Setup global event listeners
+      setupAuth();
       setupSuggestions();
       setupPSIForm();
       setupChat();
@@ -3211,7 +3212,6 @@
           if (userDisplay) userDisplay.innerText = `Signed in as ${localStorage.getItem('user') || 'Admin'}`;
 
           setupWS();
-          setupPSIForm();
           const hero = document.getElementById('hero-area');
           if (hero) hero.style.display = 'block';
           console.log("✅ App Ready.");
