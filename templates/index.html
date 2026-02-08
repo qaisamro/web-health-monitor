@@ -673,6 +673,82 @@
       letter-spacing: 0.05em;
     }
 
+    /* Global Stats Section */
+    .global-stats-container {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1.5rem;
+      margin-bottom: 2.5rem;
+    }
+
+    .stat-card {
+      background: var(--bg-glass);
+      border: 1px solid var(--border);
+      padding: 1.5rem;
+      border-radius: var(--radius-lg);
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .stat-card:hover {
+      transform: translateY(-5px);
+      box-shadow: var(--shadow-xl);
+      border-color: var(--primary);
+    }
+
+    .stat-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 4px;
+      background: var(--primary);
+      opacity: 0.3;
+    }
+
+    .stat-label {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      font-weight: 600;
+    }
+
+    .stat-value {
+      font-size: 2rem;
+      font-weight: 800;
+      color: var(--text-main);
+      display: flex;
+      align-items: baseline;
+      gap: 0.2rem;
+    }
+
+    .stat-unit {
+      font-size: 1rem;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    .stat-trend {
+      font-size: 0.75rem;
+      display: flex;
+      align-items: center;
+      gap: 0.3rem;
+    }
+
+    .trend-up {
+      color: var(--success);
+    }
+
+    .trend-neutral {
+      color: var(--text-muted);
+    }
+
     .monitor-url {
       color: var(--text-muted);
       font-size: 0.9rem;
@@ -2208,6 +2284,44 @@
         <button onclick="showHome()" class="btn btn-outline">&larr; New Analysis</button>
       </div>
 
+      <!-- Global Stats Summary -->
+      <div class="global-stats-container">
+        <div class="stat-card">
+          <div class="stat-label">System Health</div>
+          <div class="stat-value" id="stat-health">--<span class="stat-unit">%</span></div>
+          <div class="stat-trend trend-up" id="stat-health-trend">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+              <polyline points="22 7 13.5 15.5 8.5 10.5 2 17"></polyline>
+              <polyline points="16 7 22 7 22 13"></polyline>
+            </svg>
+            Optimal Uptime
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Avg. Response Time</div>
+          <div class="stat-value" id="stat-latency">--<span class="stat-unit">s</span></div>
+          <div class="stat-trend trend-neutral">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+              <circle cx="12" cy="12" r="10"></circle>
+              <polyline points="12 6 12 12 16 14"></polyline>
+            </svg>
+            Live Latency
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Total Monitors</div>
+          <div class="stat-value" id="stat-total">--</div>
+          <div class="stat-trend trend-neutral">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+              <path
+                d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z">
+              </path>
+            </svg>
+            Active Traces
+          </div>
+        </div>
+      </div>
+
       <div id="monitor-list" class="monitor-list">
         <!-- List Items -->
       </div>
@@ -2592,8 +2706,36 @@
           return;
         }
 
-        // Calculate health
+        // Calculate health & stats
         const upCount = monitors.filter(m => !m.checks || m.checks.length === 0 || m.checks[0].is_up).length;
+        const uptimePct = Math.round((upCount / monitors.length) * 100);
+
+        const scoredMonitors = monitors.filter(m => m.perf_fcp !== null);
+        const avgLatency = scoredMonitors.length > 0
+          ? (scoredMonitors.reduce((acc, m) => acc + m.perf_fcp, 0) / scoredMonitors.length).toFixed(2)
+          : '--';
+
+        // Update Summary Cards
+        const healthEl = document.getElementById('stat-health');
+        if (healthEl) healthEl.innerHTML = `${uptimePct}<span class="stat-unit">%</span>`;
+
+        const latencyEl = document.getElementById('stat-latency');
+        if (latencyEl) latencyEl.innerHTML = `${avgLatency}<span class="stat-unit">s</span>`;
+
+        const totalEl = document.getElementById('stat-total');
+        if (totalEl) totalEl.innerText = monitors.length;
+
+        const healthTrend = document.getElementById('stat-health-trend');
+        if (healthTrend) {
+          if (uptimePct >= 90) {
+            healthTrend.className = 'stat-trend trend-up';
+            healthTrend.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"></polyline><polyline points="16 7 22 7 22 13"></polyline></svg> Optimal Uptime';
+          } else {
+            healthTrend.className = 'stat-trend trend-neutral';
+            healthTrend.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg> Action Required';
+          }
+        }
+
         updateHealthIndicator(upCount, monitors.length);
 
         list.innerHTML = monitors.reverse().map(m => `
